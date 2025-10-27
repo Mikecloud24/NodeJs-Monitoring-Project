@@ -44,7 +44,7 @@ jobs:
           APP_PID=$!
           echo "App started with PID $APP_PID; waiting for http://localhost:3000 ..."
 
-          # Wait until the server is ready (npx wait-on will download and run wait-on if needed)
+          # Wait until the server is ready
           npx wait-on http://localhost:3000
 
           # Run tests once the server is responsive
@@ -56,12 +56,34 @@ jobs:
           kill "$APP_PID" || true
           popd
 
-      - name: Zip artifact for deployment (zip contents of package path)
+      - name: Prepare package staging (ensure host.json is at zip root)
         shell: bash
         run: |
-          pushd "${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}"
+          set -euo pipefail
+          STAGING="$GITHUB_WORKSPACE/package_staging"
+          rm -rf "$STAGING"
+          mkdir -p "$STAGING"
+
+          # Copy the function app folder contents into staging
+          echo "Copying function app contents from $GITHUB_WORKSPACE/${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }} to staging..."
+          cp -a "$GITHUB_WORKSPACE/${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}/." "$STAGING/"
+
+          # If host.json exists in repo root, copy it into the staging root so host.json is at zip root
+          if [ -f "$GITHUB_WORKSPACE/host.json" ]; then
+            echo "Found host.json at repo root; copying to staging root..."
+            cp "$GITHUB_WORKSPACE/host.json" "$STAGING/"
+          fi
+
+          # If host.json exists one level up from src (e.g., repo root/other), you can add more copy logic here
+
+      - name: Zip artifact for deployment (zip staging contents; ensure host.json is at root)
+        shell: bash
+        run: |
+          pushd "$GITHUB_WORKSPACE/package_staging"
           zip -r "$GITHUB_WORKSPACE/release.zip" . -x "**/.git/**" "**/node_modules/**/.*" "**/node_modules/**/.cache/**"
           popd
+          echo "Created $GITHUB_WORKSPACE/release.zip (contains top-level files:)"
+          unzip -l "$GITHUB_WORKSPACE/release.zip" | sed -n '1,12p'
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
@@ -94,7 +116,7 @@ jobs:
         id: fa
         with:
           app-name: 'mikecloud24-functionapp'
-          slot-name: 'Production'
+          slot-name: 'Dev'
           package: 'release.zip'
-          
+
 
