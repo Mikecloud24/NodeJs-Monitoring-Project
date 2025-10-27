@@ -116,7 +116,8 @@ jobs:
         id: fa
         with:
           app-name: 'mikecloud24-functionapp'
-          slot-name: 'Dev'
+          slot-name: 'Production'
           package: 'release.zip'
+
 
 
